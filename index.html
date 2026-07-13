@@ -188,7 +188,7 @@
         <label>Calories eaten
           <input type="number" id="log-eaten" inputmode="numeric" min="0" required>
         </label>
-        <label>Calories burned
+        <label>Exercise calories burned
           <input type="number" id="log-burned" inputmode="numeric" min="0" required>
         </label>
         <div id="weight-field" hidden>
@@ -209,6 +209,11 @@
 
   <script>
     var STORAGE_KEY = 'kgcal_data';
+    var BASELINE_BURN = 1750;
+
+    function totalBurned(entry) {
+      return entry.exerciseBurned + BASELINE_BURN;
+    }
 
     function loadData() {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -240,7 +245,7 @@
       var kgChange = latest.weight - first.weight;
       var totalDeficit = 0;
       for (var i = 0; i <= latest.idx; i++) {
-        totalDeficit += (data.entries[i].burned - data.entries[i].eaten);
+        totalDeficit += (totalBurned(data.entries[i]) - data.entries[i].eaten);
       }
       var kgLost = -kgChange;
       var caloriesPerKg = kgLost !== 0 ? totalDeficit / kgLost : null;
@@ -291,12 +296,13 @@
         (function (entry) {
           var row = document.createElement('div');
           row.className = 'entry';
-          var deficit = entry.burned - entry.eaten;
+          var burned = totalBurned(entry);
+          var deficit = burned - entry.eaten;
           var deficitLabel = (deficit >= 0 ? '+' : '') + deficit + ' kcal';
           row.innerHTML =
             '<div class="entry-main">' +
               '<div class="entry-date">' + entry.date + '</div>' +
-              '<div class="entry-line">Eaten ' + entry.eaten + ' · Burned ' + entry.burned + ' · ' + deficitLabel + '</div>' +
+              '<div class="entry-line">Eaten ' + entry.eaten + ' · Burned ' + burned + ' (' + entry.exerciseBurned + ' exercise + ' + BASELINE_BURN + ' baseline) · ' + deficitLabel + '</div>' +
               (entry.weight != null ? '<div class="entry-weight">Weighed in: ' + entry.weight + ' kg</div>' : '') +
             '</div>' +
             '<button class="del-btn" aria-label="Delete entry">×</button>';
@@ -341,7 +347,7 @@
       e.preventDefault();
       var data = loadData();
       var eaten = parseInt(document.getElementById('log-eaten').value, 10);
-      var burned = parseInt(document.getElementById('log-burned').value, 10);
+      var exerciseBurned = parseInt(document.getElementById('log-burned').value, 10);
       var weightField = document.getElementById('weight-field');
       var weightVal = document.getElementById('log-weight').value;
       var weight = (!weightField.hidden && weightVal !== '') ? parseFloat(weightVal) : null;
@@ -350,7 +356,7 @@
         id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
         date: todayStr(),
         eaten: eaten,
-        burned: burned,
+        exerciseBurned: exerciseBurned,
         weight: weight
       };
       data.entries.push(entry);
