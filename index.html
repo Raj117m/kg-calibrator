@@ -64,7 +64,7 @@
     font-size: 0.95rem;
     color: #bbb;
   }
-  input[type="number"] {
+  input[type="number"], input[type="text"] {
     font-size: 1.1rem;
     padding: 0.85rem 1rem;
     border-radius: 12px;
@@ -74,7 +74,7 @@
     width: 100%;
     -webkit-appearance: none;
   }
-  input[type="number"]:focus {
+  input:focus {
     outline: 2px solid #4d8dff;
   }
   button {
@@ -115,12 +115,36 @@
   }
   .entry-main { flex: 1; min-width: 0; }
   .entry-date { font-size: 0.85rem; color: #999; }
-  .entry-line { font-size: 1rem; margin-top: 0.15rem; }
+  .today-tag {
+    color: #4d8dff;
+    font-weight: 600;
+  }
+  .entry-status {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-top: 0.15rem;
+  }
+  .entry-status.deficit { color: #6fcf6f; }
+  .entry-status.surplus { color: #ff8f6b; }
   .entry-weight {
     display: inline-block;
     margin-top: 0.25rem;
     font-size: 0.8rem;
     color: #e5d76a;
+  }
+  .entry-main details {
+    margin-top: 0.35rem;
+  }
+  .entry-main summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #4d8dff;
+  }
+  .entry-calc {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: #999;
+    line-height: 1.6;
   }
   .del-btn {
     flex-shrink: 0;
@@ -141,42 +165,85 @@
     padding: 1rem 0;
   }
 
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: #0b0b0f;
+  .people-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .people-pills {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .person-pill {
+    flex-shrink: 0;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: #17171d;
+    border: 1px solid #26262e;
+    color: #ccc;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .person-pill.active {
+    background: #4d8dff;
+    border-color: #4d8dff;
+    color: #fff;
+  }
+  .add-person-btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 1.4rem;
+    line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.5rem;
-    z-index: 10;
   }
-  .overlay-box { width: 100%; max-width: 400px; }
-  .overlay-box h1 { font-size: 1.5rem; }
-  .overlay-box .sub { margin-bottom: 2rem; }
+  #add-person-form {
+    flex-direction: row;
+    margin-bottom: 1.25rem;
+  }
+  #add-person-form input { flex: 1; }
+  #add-person-form button { flex-shrink: 0; width: auto; padding: 0 1.2rem; }
 
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 
-  <div id="onboarding" class="overlay" hidden>
-    <div class="overlay-box">
-      <h1>Welcome</h1>
-      <p class="sub">Let's start with your current weight. This becomes your baseline for calibration.</p>
-      <form id="onboarding-form">
-        <label>Starting weight (kg)
-          <input type="number" id="onboarding-weight" step="0.1" min="0" inputmode="decimal" required>
-        </label>
-        <button type="submit">Save &amp; Start</button>
-      </form>
-    </div>
+  <div class="people-bar">
+    <div id="people-pills" class="people-pills"></div>
+    <button id="add-person-btn" class="add-person-btn" type="button" aria-label="Add person">+</button>
+  </div>
+  <form id="add-person-form" hidden>
+    <input type="text" id="new-person-name" placeholder="Their name" required>
+    <button type="submit">Add</button>
+  </form>
+
+  <h1>kg Calibrator</h1>
+  <p class="sub" id="active-sub">Your personal calories-per-kg number.</p>
+
+  <div id="onboarding-card" class="card" hidden>
+    <h2>Welcome, <span id="onboarding-name"></span></h2>
+    <p class="metric-sub" style="margin-bottom: 1rem;">Let's start with a current weight. This becomes the baseline for calibration.</p>
+    <form id="onboarding-form">
+      <label>Starting weight (kg)
+        <input type="number" id="onboarding-weight" step="0.1" min="0" inputmode="decimal" required>
+      </label>
+      <button type="submit">Save &amp; Start</button>
+    </form>
   </div>
 
   <div id="app" hidden>
-    <h1>kg Calibrator</h1>
-    <p class="sub">Your personal calories-per-kg number.</p>
-
     <div class="card">
       <h2>Calibration</h2>
       <div id="calibration-content"></div>
@@ -208,20 +275,16 @@
   </div>
 
   <script>
-    var STORAGE_KEY = 'kgcal_data';
     var BASELINE_BURN = 1750;
 
-    function totalBurned(entry) {
-      return entry.exerciseBurned + BASELINE_BURN;
+    function genId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     }
 
-    function loadData() {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }
-
-    function saveData(data) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
     }
 
     function todayStr() {
@@ -231,6 +294,58 @@
       var day = String(d.getDate()).padStart(2, '0');
       return y + '-' + m + '-' + day;
     }
+
+    function totalBurned(entry) {
+      return entry.exerciseBurned + BASELINE_BURN;
+    }
+
+    // --- people & storage ---
+
+    function loadPeople() {
+      var raw = localStorage.getItem('kgcal_people');
+      return raw ? JSON.parse(raw) : [];
+    }
+    function savePeople(people) {
+      localStorage.setItem('kgcal_people', JSON.stringify(people));
+    }
+    function loadActivePersonId() {
+      return localStorage.getItem('kgcal_active_person') || '';
+    }
+    function saveActivePersonId(id) {
+      localStorage.setItem('kgcal_active_person', id);
+    }
+    function personDataKey(id) {
+      return 'kgcal_data_' + id;
+    }
+    function loadPersonData(id) {
+      var raw = localStorage.getItem(personDataKey(id));
+      return raw ? JSON.parse(raw) : null;
+    }
+    function savePersonData(id, data) {
+      localStorage.setItem(personDataKey(id), JSON.stringify(data));
+    }
+
+    function migrateIfNeeded() {
+      if (localStorage.getItem('kgcal_people')) return;
+      var oldData = localStorage.getItem('kgcal_data');
+      var id = 'p_' + genId();
+      if (oldData) {
+        localStorage.setItem(personDataKey(id), oldData);
+        localStorage.removeItem('kgcal_data');
+      }
+      savePeople([{ id: id, name: 'Raj' }]);
+      saveActivePersonId(id);
+    }
+
+    function ensureActivePerson() {
+      var people = loadPeople();
+      var activeId = loadActivePersonId();
+      if (!people.some(function (p) { return p.id === activeId; })) {
+        saveActivePersonId(people[0].id);
+      }
+    }
+
+    // --- calibration ---
 
     function calibration(data) {
       var weighIns = [];
@@ -263,7 +378,7 @@
       var el = document.getElementById('calibration-content');
       var c = calibration(data);
       if (!c) {
-        el.innerHTML = '<div class="metric-sub">Log weigh-ins (every 4th entry asks) to unlock your calibration number. You need at least one more weigh-in beyond your starting weight.</div>';
+        el.innerHTML = '<div class="metric-sub">Log weigh-ins (every 4th entry asks) to unlock the calibration number. You need at least one more weigh-in beyond the starting weight.</div>';
         return;
       }
       if (c.caloriesPerKg === null) {
@@ -278,11 +393,34 @@
     }
 
     function renderLogForm(data) {
-      var nextEntryNumber = data.entries.length + 1;
-      var needsWeight = nextEntryNumber % 4 === 0;
+      var today = todayStr();
+      var todayIdx = data.entries.findIndex(function (e) { return e.date === today; });
+      var editing = todayIdx !== -1;
+      var entryNumber = editing ? todayIdx + 1 : data.entries.length + 1;
+      var needsWeight = entryNumber % 4 === 0;
+
       document.getElementById('weight-field').hidden = !needsWeight;
-      document.getElementById('weight-entry-num').textContent = nextEntryNumber;
+      document.getElementById('weight-entry-num').textContent = entryNumber;
       document.getElementById('log-weight').required = needsWeight;
+
+      var form = document.getElementById('log-form');
+      form.dataset.editingId = editing ? data.entries[todayIdx].id : '';
+
+      var eatenInput = document.getElementById('log-eaten');
+      var burnedInput = document.getElementById('log-burned');
+      var weightInput = document.getElementById('log-weight');
+      var submitBtn = form.querySelector('button[type="submit"]');
+      var focused = document.activeElement;
+
+      if (editing && focused !== eatenInput && focused !== burnedInput && focused !== weightInput) {
+        var todayEntry = data.entries[todayIdx];
+        eatenInput.value = todayEntry.eaten;
+        burnedInput.value = todayEntry.exerciseBurned;
+        if (todayEntry.weight != null) weightInput.value = todayEntry.weight;
+        submitBtn.textContent = 'Update Today\'s Entry';
+      } else if (!editing) {
+        submitBtn.textContent = 'Add Entry';
+      }
     }
 
     function renderEntries(data) {
@@ -292,24 +430,36 @@
         return;
       }
       list.innerHTML = '';
+      var today = todayStr();
       for (var i = data.entries.length - 1; i >= 0; i--) {
         (function (entry) {
           var row = document.createElement('div');
           row.className = 'entry';
           var burned = totalBurned(entry);
           var deficit = burned - entry.eaten;
-          var deficitLabel = (deficit >= 0 ? '+' : '') + deficit + ' kcal';
+          var isDeficit = deficit >= 0;
+          var statusLabel = (isDeficit ? '−' : '+') + Math.abs(deficit) + ' kcal · ' + (isDeficit ? 'Deficit' : 'Surplus');
           row.innerHTML =
             '<div class="entry-main">' +
-              '<div class="entry-date">' + entry.date + '</div>' +
-              '<div class="entry-line">Eaten ' + entry.eaten + ' · Burned ' + burned + ' (' + entry.exerciseBurned + ' exercise + ' + BASELINE_BURN + ' baseline) · ' + deficitLabel + '</div>' +
-              (entry.weight != null ? '<div class="entry-weight">Weighed in: ' + entry.weight + ' kg</div>' : '') +
+              '<div class="entry-date">' + entry.date + (entry.date === today ? ' <span class="today-tag">(today)</span>' : '') + '</div>' +
+              '<div class="entry-status ' + (isDeficit ? 'deficit' : 'surplus') + '">' + statusLabel + '</div>' +
+              '<details>' +
+                '<summary>View</summary>' +
+                '<div class="entry-calc">' +
+                  'Eaten: ' + entry.eaten + ' kcal<br>' +
+                  'Exercise burned: ' + entry.exerciseBurned + ' kcal<br>' +
+                  'Baseline burn: ' + BASELINE_BURN + ' kcal<br>' +
+                  'Total burned: ' + burned + ' kcal' +
+                  (entry.weight != null ? '<br>Weighed in: ' + entry.weight + ' kg' : '') +
+                '</div>' +
+              '</details>' +
             '</div>' +
             '<button class="del-btn" aria-label="Delete entry">×</button>';
           row.querySelector('.del-btn').addEventListener('click', function () {
-            var data = loadData();
+            var activeId = loadActivePersonId();
+            var data = loadPersonData(activeId);
             data.entries = data.entries.filter(function (e) { return e.id !== entry.id; });
-            saveData(data);
+            savePersonData(activeId, data);
             renderAll(data);
           });
           list.appendChild(row);
@@ -323,46 +473,108 @@
       renderEntries(data);
     }
 
-    function init() {
-      var data = loadData();
+    function renderPeopleBar() {
+      var people = loadPeople();
+      var activeId = loadActivePersonId();
+      var container = document.getElementById('people-pills');
+      container.innerHTML = '';
+      people.forEach(function (p) {
+        var pill = document.createElement('div');
+        pill.className = 'person-pill' + (p.id === activeId ? ' active' : '');
+        pill.textContent = p.name;
+        pill.addEventListener('click', function () {
+          saveActivePersonId(p.id);
+          document.getElementById('add-person-form').hidden = true;
+          renderForActivePerson();
+        });
+        container.appendChild(pill);
+      });
+    }
+
+    function renderForActivePerson() {
+      renderPeopleBar();
+      var activeId = loadActivePersonId();
+      var people = loadPeople();
+      var activePerson = people.find(function (p) { return p.id === activeId; });
+      var data = loadPersonData(activeId);
+
+      document.getElementById('active-sub').innerHTML = 'Tracking for <strong>' + escapeHtml(activePerson.name) + '</strong>.';
+
       if (!data) {
-        document.getElementById('onboarding').hidden = false;
+        document.getElementById('onboarding-name').textContent = activePerson.name;
+        document.getElementById('onboarding-card').hidden = false;
         document.getElementById('app').hidden = true;
       } else {
-        document.getElementById('onboarding').hidden = true;
+        document.getElementById('onboarding-card').hidden = true;
         document.getElementById('app').hidden = false;
         renderAll(data);
       }
     }
 
+    function init() {
+      migrateIfNeeded();
+      ensureActivePerson();
+      renderForActivePerson();
+    }
+
+    document.getElementById('add-person-btn').addEventListener('click', function () {
+      var form = document.getElementById('add-person-form');
+      form.hidden = !form.hidden;
+      if (!form.hidden) document.getElementById('new-person-name').focus();
+    });
+
+    document.getElementById('add-person-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var nameInput = document.getElementById('new-person-name');
+      var name = nameInput.value.trim();
+      if (!name) return;
+      var people = loadPeople();
+      var newId = 'p_' + genId();
+      people.push({ id: newId, name: name });
+      savePeople(people);
+      saveActivePersonId(newId);
+      nameInput.value = '';
+      document.getElementById('add-person-form').hidden = true;
+      renderForActivePerson();
+    });
+
     document.getElementById('onboarding-form').addEventListener('submit', function (e) {
       e.preventDefault();
       var weight = parseFloat(document.getElementById('onboarding-weight').value);
+      var activeId = loadActivePersonId();
       var data = { startingWeight: weight, startingDate: todayStr(), entries: [] };
-      saveData(data);
-      init();
+      savePersonData(activeId, data);
+      document.getElementById('onboarding-form').reset();
+      renderForActivePerson();
     });
 
     document.getElementById('log-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var data = loadData();
+      var form = e.target;
+      var activeId = loadActivePersonId();
+      var data = loadPersonData(activeId);
       var eaten = parseInt(document.getElementById('log-eaten').value, 10);
       var exerciseBurned = parseInt(document.getElementById('log-burned').value, 10);
       var weightField = document.getElementById('weight-field');
       var weightVal = document.getElementById('log-weight').value;
       var weight = (!weightField.hidden && weightVal !== '') ? parseFloat(weightVal) : null;
+      var editingId = form.dataset.editingId;
 
-      var entry = {
-        id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-        date: todayStr(),
-        eaten: eaten,
-        exerciseBurned: exerciseBurned,
-        weight: weight
-      };
-      data.entries.push(entry);
-      saveData(data);
-
-      document.getElementById('log-form').reset();
+      if (editingId) {
+        var existing = data.entries.find(function (e) { return e.id === editingId; });
+        existing.eaten = eaten;
+        existing.exerciseBurned = exerciseBurned;
+        existing.weight = weight;
+      } else {
+        data.entries.push({
+          id: genId(),
+          date: todayStr(),
+          eaten: eaten,
+          exerciseBurned: exerciseBurned,
+          weight: weight
+        });
+      }
+      savePersonData(activeId, data);
       renderAll(data);
     });
 
