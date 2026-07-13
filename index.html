@@ -11,7 +11,12 @@
 <title>kg Calibrator</title>
 <style>
   * { box-sizing: border-box; }
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --gold: #d4af37;
+    --gold-dark: #a9841f;
+    --gold-text: #1a1400;
+  }
   html, body {
     margin: 0;
     padding: 0;
@@ -50,6 +55,7 @@
     font-size: 2.1rem;
     font-weight: 700;
     line-height: 1.15;
+    color: var(--gold);
   }
   .metric-sub {
     color: #999;
@@ -75,7 +81,7 @@
     -webkit-appearance: none;
   }
   input:focus {
-    outline: 2px solid #4d8dff;
+    outline: 2px solid var(--gold);
   }
   button {
     font-size: 1.1rem;
@@ -84,16 +90,23 @@
     min-height: 52px;
     border-radius: 12px;
     border: none;
-    background: #4d8dff;
-    color: #fff;
+    background: var(--gold);
+    color: var(--gold-text);
     cursor: pointer;
   }
-  button:active { background: #3b73db; }
+  button:active { background: var(--gold-dark); }
   button.secondary {
     background: transparent;
     border: 1px solid #333;
     color: #ddd;
   }
+  .danger-btn {
+    background: transparent;
+    border: 1px solid #3a1c1c;
+    color: #ff8080;
+    margin-top: 0.5rem;
+  }
+  .danger-btn:active { background: #2a1414; }
   .weight-flag {
     background: #22240f;
     border: 1px solid #4a4a1f;
@@ -116,7 +129,7 @@
   .entry-main { flex: 1; min-width: 0; }
   .entry-date { font-size: 0.85rem; color: #999; }
   .today-tag {
-    color: #4d8dff;
+    color: var(--gold);
     font-weight: 600;
   }
   .entry-status {
@@ -138,13 +151,28 @@
   .entry-main summary {
     cursor: pointer;
     font-size: 0.8rem;
-    color: #4d8dff;
+    color: var(--gold);
   }
   .entry-calc {
     margin-top: 0.4rem;
     font-size: 0.85rem;
     color: #999;
     line-height: 1.6;
+  }
+  .chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 100px;
+    overflow-x: auto;
+    padding-top: 0.5rem;
+  }
+  .chart-bar {
+    flex: 0 0 14px;
+    width: 14px;
+    background: var(--gold);
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
   }
   .del-btn {
     flex-shrink: 0;
@@ -191,9 +219,9 @@
     white-space: nowrap;
   }
   .person-pill.active {
-    background: #4d8dff;
-    border-color: #4d8dff;
-    color: #fff;
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--gold-text);
   }
   .add-person-btn {
     flex-shrink: 0;
@@ -250,6 +278,11 @@
     </div>
 
     <div class="card">
+      <h2>Calories eaten</h2>
+      <div id="calorie-chart" class="chart"></div>
+    </div>
+
+    <div class="card">
       <h2>Log today</h2>
       <form id="log-form">
         <label>Calories eaten
@@ -273,6 +306,8 @@
       <div id="entries-list" class="entries"></div>
     </div>
   </div>
+
+  <button type="button" id="remove-person-btn" class="danger-btn">Remove person</button>
 
   <script>
     var BASELINE_BURN = 1750;
@@ -467,8 +502,27 @@
       }
     }
 
+    function renderChart(data) {
+      var container = document.getElementById('calorie-chart');
+      if (!data.entries.length) {
+        container.innerHTML = '<div class="empty">No data yet.</div>';
+        return;
+      }
+      var maxEaten = Math.max.apply(null, data.entries.map(function (e) { return e.eaten; }));
+      container.innerHTML = '';
+      data.entries.forEach(function (entry) {
+        var bar = document.createElement('div');
+        bar.className = 'chart-bar';
+        var pct = maxEaten > 0 ? (entry.eaten / maxEaten) * 100 : 0;
+        bar.style.height = Math.max(pct, 4) + '%';
+        bar.title = entry.date + ': ' + entry.eaten + ' kcal';
+        container.appendChild(bar);
+      });
+    }
+
     function renderAll(data) {
       renderCalibration(data);
+      renderChart(data);
       renderLogForm(data);
       renderEntries(data);
     }
@@ -499,6 +553,7 @@
       var data = loadPersonData(activeId);
 
       document.getElementById('active-sub').innerHTML = 'Tracking for <strong>' + escapeHtml(activePerson.name) + '</strong>.';
+      document.getElementById('remove-person-btn').textContent = 'Remove ' + activePerson.name + ' and their data';
 
       if (!data) {
         document.getElementById('onboarding-name').textContent = activePerson.name;
@@ -535,6 +590,22 @@
       saveActivePersonId(newId);
       nameInput.value = '';
       document.getElementById('add-person-form').hidden = true;
+      renderForActivePerson();
+    });
+
+    document.getElementById('remove-person-btn').addEventListener('click', function () {
+      var people = loadPeople();
+      if (people.length <= 1) {
+        alert('You need at least one person — add another before removing this one.');
+        return;
+      }
+      var activeId = loadActivePersonId();
+      var activePerson = people.find(function (p) { return p.id === activeId; });
+      if (!confirm('Remove ' + activePerson.name + ' and all their data? This can\'t be undone.')) return;
+      var remaining = people.filter(function (p) { return p.id !== activeId; });
+      savePeople(remaining);
+      localStorage.removeItem(personDataKey(activeId));
+      saveActivePersonId(remaining[0].id);
       renderForActivePerson();
     });
 
