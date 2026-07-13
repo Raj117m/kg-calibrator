@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="kg Calibrator">
+<meta name="theme-color" content="#0b0b0f">
+<title>kg Calibrator</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #0b0b0f;
+    color: #f2f2f2;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 18px;
+  }
+  body {
+    padding: calc(env(safe-area-inset-top) + 1.5rem) 1.25rem calc(env(safe-area-inset-bottom) + 2rem);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin: 0 0 0.25rem;
+  }
+  .sub {
+    color: #999;
+    margin: 0 0 1.5rem;
+    font-size: 0.95rem;
+  }
+  .card {
+    background: #17171d;
+    border: 1px solid #26262e;
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.75rem;
+    color: #ccc;
+  }
+  .metric {
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .metric-sub {
+    color: #999;
+    font-size: 0.9rem;
+    margin-top: 0.35rem;
+  }
+  form { display: flex; flex-direction: column; gap: 0.9rem; }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.95rem;
+    color: #bbb;
+  }
+  input[type="number"] {
+    font-size: 1.1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    border: 1px solid #2e2e38;
+    background: #0f0f14;
+    color: #fff;
+    width: 100%;
+    -webkit-appearance: none;
+  }
+  input[type="number"]:focus {
+    outline: 2px solid #4d8dff;
+  }
+  button {
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 0.95rem 1rem;
+    min-height: 52px;
+    border-radius: 12px;
+    border: none;
+    background: #4d8dff;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:active { background: #3b73db; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid #333;
+    color: #ddd;
+  }
+  .weight-flag {
+    background: #22240f;
+    border: 1px solid #4a4a1f;
+    color: #e5d76a;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+  }
+  .entries { display: flex; flex-direction: column; gap: 0.6rem; }
+  .entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: #101015;
+    border: 1px solid #24242c;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+  }
+  .entry-main { flex: 1; min-width: 0; }
+  .entry-date { font-size: 0.85rem; color: #999; }
+  .entry-line { font-size: 1rem; margin-top: 0.15rem; }
+  .entry-weight {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #e5d76a;
+  }
+  .del-btn {
+    flex-shrink: 0;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    background: #2a1414;
+    color: #ff8080;
+    border: 1px solid #3a1c1c;
+    border-radius: 10px;
+  }
+  .empty {
+    color: #777;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: #0b0b0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 10;
+  }
+  .overlay-box { width: 100%; max-width: 400px; }
+  .overlay-box h1 { font-size: 1.5rem; }
+  .overlay-box .sub { margin-bottom: 2rem; }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+  <div id="onboarding" class="overlay" hidden>
+    <div class="overlay-box">
+      <h1>Welcome</h1>
+      <p class="sub">Let's start with your current weight. This becomes your baseline for calibration.</p>
+      <form id="onboarding-form">
+        <label>Starting weight (kg)
+          <input type="number" id="onboarding-weight" step="0.1" min="0" inputmode="decimal" required>
+        </label>
+        <button type="submit">Save &amp; Start</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app" hidden>
+    <h1>kg Calibrator</h1>
+    <p class="sub">Your personal calories-per-kg number.</p>
+
+    <div class="card">
+      <h2>Calibration</h2>
+      <div id="calibration-content"></div>
+    </div>
+
+    <div class="card">
+      <h2>Log today</h2>
+      <form id="log-form">
+        <label>Calories eaten
+          <input type="number" id="log-eaten" inputmode="numeric" min="0" required>
+        </label>
+        <label>Calories burned
+          <input type="number" id="log-burned" inputmode="numeric" min="0" required>
+        </label>
+        <div id="weight-field" hidden>
+          <div class="weight-flag">This is entry #<span id="weight-entry-num"></span> — time to log your current weight.</div>
+          <label style="margin-top: 0.75rem;">Current weight (kg)
+            <input type="number" id="log-weight" step="0.1" min="0" inputmode="decimal">
+          </label>
+        </div>
+        <button type="submit">Add Entry</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Entries</h2>
+      <div id="entries-list" class="entries"></div>
+    </div>
+  </div>
+
+  <script>
+    var STORAGE_KEY = 'kgcal_data';
+
+    function loadData() {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
+
+    function saveData(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function todayStr() {
+      var d = new Date();
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function calibration(data) {
+      var weighIns = [];
+      data.entries.forEach(function (e, i) {
+        if (e.weight != null) weighIns.push({ weight: e.weight, idx: i, date: e.date });
+      });
+      var points = [{ weight: data.startingWeight, idx: -1, date: data.startingDate }].concat(weighIns);
+      if (points.length < 2) return null;
+
+      var first = points[0];
+      var latest = points[points.length - 1];
+      var kgChange = latest.weight - first.weight;
+      var totalDeficit = 0;
+      for (var i = 0; i <= latest.idx; i++) {
+        totalDeficit += (data.entries[i].burned - data.entries[i].eaten);
+      }
+      var kgLost = -kgChange;
+      var caloriesPerKg = kgLost !== 0 ? totalDeficit / kgLost : null;
+
+      return {
+        first: first,
+        latest: latest,
+        kgChange: kgChange,
+        totalDeficit: totalDeficit,
+        caloriesPerKg: caloriesPerKg
+      };
+    }
+
+    function renderCalibration(data) {
+      var el = document.getElementById('calibration-content');
+      var c = calibration(data);
+      if (!c) {
+        el.innerHTML = '<div class="metric-sub">Log weigh-ins (every 4th entry asks) to unlock your calibration number. You need at least one more weigh-in beyond your starting weight.</div>';
+        return;
+      }
+      if (c.caloriesPerKg === null) {
+        el.innerHTML = '<div class="metric-sub">Weight hasn\'t changed yet (' + c.first.weight + ' kg → ' + c.latest.weight + ' kg), so calories/kg can\'t be calculated yet.</div>';
+        return;
+      }
+      var trend = c.kgChange < 0 ? 'lost' : 'gained';
+      var kgAbs = Math.abs(c.kgChange).toFixed(1);
+      el.innerHTML =
+        '<div class="metric">' + Math.round(c.caloriesPerKg).toLocaleString() + ' kcal/kg</div>' +
+        '<div class="metric-sub">' + c.first.weight + ' kg → ' + c.latest.weight + ' kg (' + trend + ' ' + kgAbs + ' kg) over a ' + c.totalDeficit.toLocaleString() + ' kcal deficit</div>';
+    }
+
+    function renderLogForm(data) {
+      var nextEntryNumber = data.entries.length + 1;
+      var needsWeight = nextEntryNumber % 4 === 0;
+      document.getElementById('weight-field').hidden = !needsWeight;
+      document.getElementById('weight-entry-num').textContent = nextEntryNumber;
+      document.getElementById('log-weight').required = needsWeight;
+    }
+
+    function renderEntries(data) {
+      var list = document.getElementById('entries-list');
+      if (!data.entries.length) {
+        list.innerHTML = '<div class="empty">No entries yet.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      for (var i = data.entries.length - 1; i >= 0; i--) {
+        (function (entry) {
+          var row = document.createElement('div');
+          row.className = 'entry';
+          var deficit = entry.burned - entry.eaten;
+          var deficitLabel = (deficit >= 0 ? '+' : '') + deficit + ' kcal';
+          row.innerHTML =
+            '<div class="entry-main">' +
+              '<div class="entry-date">' + entry.date + '</div>' +
+              '<div class="entry-line">Eaten ' + entry.eaten + ' · Burned ' + entry.burned + ' · ' + deficitLabel + '</div>' +
+              (entry.weight != null ? '<div class="entry-weight">Weighed in: ' + entry.weight + ' kg</div>' : '') +
+            '</div>' +
+            '<button class="del-btn" aria-label="Delete entry">×</button>';
+          row.querySelector('.del-btn').addEventListener('click', function () {
+            var data = loadData();
+            data.entries = data.entries.filter(function (e) { return e.id !== entry.id; });
+            saveData(data);
+            renderAll(data);
+          });
+          list.appendChild(row);
+        })(data.entries[i]);
+      }
+    }
+
+    function renderAll(data) {
+      renderCalibration(data);
+      renderLogForm(data);
+      renderEntries(data);
+    }
+
+    function init() {
+      var data = loadData();
+      if (!data) {
+        document.getElementById('onboarding').hidden = false;
+        document.getElementById('app').hidden = true;
+      } else {
+        document.getElementById('onboarding').hidden = true;
+        document.getElementById('app').hidden = false;
+        renderAll(data);
+      }
+    }
+
+    document.getElementById('onboarding-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var weight = parseFloat(document.getElementById('onboarding-weight').value);
+      var data = { startingWeight: weight, startingDate: todayStr(), entries: [] };
+      saveData(data);
+      init();
+    });
+
+    document.getElementById('log-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var data = loadData();
+      var eaten = parseInt(document.getElementById('log-eaten').value, 10);
+      var burned = parseInt(document.getElementById('log-burned').value, 10);
+      var weightField = document.getElementById('weight-field');
+      var weightVal = document.getElementById('log-weight').value;
+      var weight = (!weightField.hidden && weightVal !== '') ? parseFloat(weightVal) : null;
+
+      var entry = {
+        id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+        date: todayStr(),
+        eaten: eaten,
+        burned: burned,
+        weight: weight
+      };
+      data.entries.push(entry);
+      saveData(data);
+
+      document.getElementById('log-form').reset();
+      renderAll(data);
+    });
+
+    init();
+  </script>
+</body>
+</html>
